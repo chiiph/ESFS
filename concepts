@@ -1,0 +1,288 @@
+Storage unit - Block
+
+A block of data will be located in one image. Blocks will be 
+distributed among the different storage services.
+A block will be the abstract data type that will be base for
+the inodes, redirection blocks and data blocks.
+
+File abstraction
+
+A file is represented by one Inode, several DirectionBlocks, and data 
+Blocks.
+To open a file, the inode must be fetched, from there, the multiple 
+data blocks must be located and fetched (if there are DirectionBlocks
+they must be fetched too, and the data they represent).
+All data must be downloaded to a ramdisk, for efficiency and protection.
+Once the group of images are downloaded, it's saved locally as a cache.
+
+Since images may contain data for more than one file, directioning of 
+data will be tide to the interleaving algorithm used.
+Blocks will be fixed size, depending on the steganography algorithm used.
+
+Directory abstraction
+
+Just as *nix systems, directories will just an special type of files,
+in which data blocks will contain variant size inode directioning entries.
+
+Other abstractions
+
+Links are not a priority for the system, but they might be developed too
+if they don't add a great development overhead.
+
+Protection
+
+All the protection will be based on the encryption and distribution
+of the data, not in the system itself, so permission bits aren't 
+modelled.
+All data is encrypted with either symmetric or asymmetric algorithms.
+The concept of fetching a block involves retrieving its steganographic
+data, decrypting it and parsing it to make it available for the fuse
+filesystem.
+To avoid Man In The Middle attacks, all files can be accessed through
+the Tor network, to ensure that the attacker can't recover any parts
+of each file and attack them offline.
+
+Caching
+
+Since image are processed locally, they must be kept somewhere. A ramdisk
+seems like the best choise for performance and since it's volatile, in case
+the power shuts down, data may be lost, but no attacker can know which images
+are involved in a given filesystem.
+Caching in this sense means "saving images for later reads", but it should
+follow a write through policy to minimize data lost, at block size, not byte.
+
+Writes
+
+For new files, once blocks are filled, they must be uploaded. The most expensive
+part will be to keep the inode updated constantly.
+Inodes should be updated on each add/del data/direction block.
+DirectionBlocks should be updated on each add/del data block.
+Data blocks should be updated on a sync or close, or once the block is full.
+
+Deletes
+
+Since all data will be at least duplicate, deletions must occur with the following
+priority:
+- Delete all duplicates, direction blocks, inodes, directory entry.
+- Delete direction blocks, inodes, directory entry.
+- Delete inodes, directory entry.
+The main concern is to keep the user's data safe, so in the worse case scenario, 
+what needs to be assured is that there is no way to reference the complete file.
+So inodes and directory entries must located at the best storage systems according
+to the "Data storage systems" section, direction blocks in the next best, and data
+blocks in any.
+
+Data storage systems
+
+The best system will be a ftp site will read/write permissions, since it'll keep
+data updated with no storage wasting.
+Other image/file hosting systems can be used. The priorities will be as follow:
+- No image post processing (depending on the steg alg)
+- No wait time on download
+- Delete capabilities
+The first one is to minimize data loss. The second one to maximize performance
+and the last one to minimize data that can't be modified, so a new block must be
+filled replacing the old one.
+
+Data interleaving
+
+A data block won't have information of only one file, rather it'll have information
+for several files, and it'll be interleaved in any of all the ways established to
+avoid water marking attacks of some sort.
+The interleaving method distinction will be a part of the directioning entry, not 
+the data blocks.
+
+Interleaving ideas
+
+AAAAAAAAAAAA
+BBBBBBBBBBBB
+AAAAAAAAAAAA
+BBBBBBBBBBBB
+
+ABABABABABAB
+ABABABABABAB
+ABABABABABAB
+ABABABABABAB
+
+ABABABABABAB
+BABABABABABA
+ABABABABABAB
+BABABABABABA
+
+Encryption algorithms
+
+This should be flexible, and extendable. So no fixed desitions on this yet.
+
+Steganography algoritms
+
+Still researching.
+
+Basic programming structure
+
+Everything must be a "plugin", in the sense that it should be possible to change
+encryption algorithms and storage methods transparently.
+Steganography algorithms, and filesystem structure should be fixed to optimize
+sizes.
+NOTE: May be encryption should be fixed to study the overhead in space of the encrypted
+data.
+
+Redundancy
+
+All data must be at least duplicated for security reasons. If a copy of a block
+is compromised in any way, a new copy must be done to maintain the duplication
+of data.
+
+Limitations
+
+Since the system has a lot of duplication, and a lot of overhead for the image 
+storage, it is limitated to small files.
+Virtually, it doesn't have real limitations, the handling of files will be 
+transparent for the user, but the open performance will decrease with the increasing
+file size.
+
+Development stages:
+Define algorithms:
+  Steganography algorithm
+    Determine its limitations [DONE-0.1]
+  Encryption algorithm:
+    Fix on method to encrypt and build the system around it, but leave the door open to
+    make this more flexible. [DONE-0.1]
+Data design:
+  Design (unencrypted) raw data block
+  Design variant size directioning entry
+  Design file structure
+    Design inodes
+    Design direction blocks
+  Design directory structure
+Classes design:
+  Abstract data to an OO model first operate locally
+  Implement FUSE filesystem
+  Add remote storage capabilities
+
+Steganography algorithm
+
+Simple least significant bit algorithm used, for its simplicity mostly.
+
+Implementation of FUSE operations:
+
+IMPORTANTE NOTE: For simplicity and to test this proof of concept, image files will contain
+data for only one file, instead of two as specified.
+
+General Filesystem Methods
+  if path doesn't exists return -errno.ENOENT
+
+  getattr(path):
+    st_ino: ignored
+    st_dev, st_blksize: arbitrary value
+    st_mode: see man stat(2) (it'll be an | of the S_* values)
+    st_nlinks: 0, we only work with symlinks
+    st_uid: fixed, it should be the current user (use GetContext fuse method for this)
+    st_gid: fixed, it should be the current user's group (use GetContext fuse method for this)
+    st_rdev: 0, ignored
+    st_size: total size in bytes
+    st_blocks: # of blocks that are alloc for the file
+    st_atime, st_mtime, st_ctime: see if necessary
+
+  readlink(path):
+    analize the inode and return the link path
+
+  mknod(path, mode, rdev): ignored
+
+  mkdir(path, mode):
+    mode is ignored, creates a directory inode, assigns a new image for it (large enough)
+    creates the entry in the parent inode dir, and saves the image with the encoded data.
+
+  unlink(path):
+    removes path, as specified in the Deletion section.
+
+  symlink(target, name):
+    creates a symlink inode, assigns an image (small enough), adds the entry to the parent
+    directory, saves the image with the encoded data.
+
+  rename(old, new):
+    if old and new just differ in the file/directory name, then edit the inode's name to new
+    or remove the inode and create a new one with the new name (if deletion isn't supported)
+    if old is in a different directory than new, check the new directory, if it exists, remove
+    the directory entre from the old path, and add it to the new path, then rename(old, new) 
+    with old being the file in the same path (not necessarily a recursive call)
+
+  link(target, name):
+    ignored, it does hardlinking.
+
+  fsinit(self):
+    it populates the root directory inode and the inodes associated with it. With populate meaning
+    downloads the files and sets the global variable for the root directory to be local.
+
+File Operation Methods
+  open(path, flags):
+    It does a chain reading of inodes from the root to the file, interprets the inode, adds it to 
+    the open_files list in memory with its flags.
+
+  create(path, flags, mode):
+    Creates the inode structure, flags and mode are ignored (probably), assigns an image to it, uploads
+    it (or not, depending on the method), and adds the inode reference to the parent directory.
+
+  read(path, length, offset, fh=None):
+    locates the inode, with the offset we find on which block to start reading, with length we find
+    on which block we stop reading, populate them, read the data and return a string with it
+
+  write(path, buf, offset, fh=None):
+    locates the inode, with the offset we find on which block to start writing, with the len(buf)
+    find out on which block to stop writing (the rest of the data must be moved, so probably we
+    will just need to open all the rest of the blocks, or think of a "reshuffle" technique)
+
+  fgetattr(path, fh=None):
+    returns a structure like getattr I think
+
+  ftruncate(path, len, fh=None):
+    Don't know yet
+
+  flush(path, fh=None):
+    Don't know yet
+
+  release(path, fh=None):
+    Don't know yet
+
+  fsync(path, fdatasync, fh=None):
+    Don't know yet
+
+  IMPORTANT: THERE ARE STILL SOME OPERATIONS MISSING IN HERE! (readdir, etc)
+
+Formatting
+
+All images must be zeroed out to form a block if fixed size multiple of the encryption
+block size.
+
+Block structure
+
+Plain raw encrypted data.
+
+Inode structure
+
+Name: 
+  Type: String
+  Length: 255 bytes max zero terminated
+Size:
+  Type: String
+  Length: 255 bytes max (this should be just 4 bytes, but its easier to handle a string in python)
+Type: 
+  Type: plain byte
+  Length: 1 byte
+  Possibilities: 
+    0 = file
+    1 = directory
+    2 = symlink
+Direction(x10):
+  Type: String
+  Length: 1000 bytes max
+  Structure:
+    [0-9]|<path_or_url>|<size>|<key>\0
+    0 = not used
+    1 = local
+    2 = http (not implemented in the first version)
+    3 = ftp (not implemented in the first version)
+Simple indirection:
+  Idem Direction
+Double indirection:
+  Idem Direction
+
