@@ -98,8 +98,8 @@ partition, but a set of png images. So you gather all those PNG images you
 always have (just PNG, nothing else for now) and you put them in a directory.
 So to format the partition, you'll do the next:
 
-  $ cd <path to the esfs repo>
-  $ python mkesfs.py <path to images>
+	$ cd <path to the esfs repo>
+	$ python mkesfs.py <path to images>
 
 And that's it, but WAIT! have you read _everything_ mkesfs.py said?
 There are three important concepts in here: the root inode, the encryption
@@ -122,28 +122,28 @@ themselves directionate each of them in a relative fashion, and you need
 to say to them "ok, you are actually in <here>", being <here> the prefix.
 Let's see an example:
 
-  $ cd /home/user/whatever/images
-  $ python mkesfs.py .
-  <save the important data somewhere!>
-  $ cd /home/user/
-  $ python esfs.py tmp-mount-point/
-  Root inode: whatever/images/someimage.png
-  Encryption key: <really long random key>
-  Prefix: 
-  $ ls tmp-mount-point/
-  WRONG! IT DOESN'T WORK
-  $ fusermount -u tmp-mount-point
+	$ cd /home/user/whatever/images
+	$ python mkesfs.py .
+	<save the important data somewhere!>
+	$ cd /home/user/
+	$ python esfs.py tmp-mount-point/
+	Root inode: whatever/images/someimage.png
+	Encryption key: <really long random key>
+	Prefix: 
+	$ ls tmp-mount-point/
+	WRONG! IT DOESN'T WORK
+	$ fusermount -u tmp-mount-point
 
-  (let's try again)
-  $ cd /home/user/
-  $ python esfs.py tmp-mount-point/
-  Root inode: someimage.png             <--- Note that there's no whatever/images/?
-  Encryption key: <really long random key>
-  Prefix: whatever/images/              <--- Here it is! (note the last /, it's very important!)
-  $ ls tmp-mount-point/
-  YAY! We have a filesystem
-  <do your filesystemy stuff here>
-  $ fusermount -u tmp-mount-point
+	(let's try again)
+	$ cd /home/user/
+	$ python esfs.py tmp-mount-point/
+	Root inode: someimage.png             <--- Note that there's no whatever/images/?
+	Encryption key: <really long random key>
+	Prefix: whatever/images/              <--- Here it is! (note the last /, it's very important!)
+	$ ls tmp-mount-point/
+	YAY! We have a filesystem
+	<do your filesystemy stuff here>
+	$ fusermount -u tmp-mount-point
 
 ### What's the future of this?
 
